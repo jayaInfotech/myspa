@@ -5,7 +5,10 @@ const Booking = require("./Models/BookingModel");
 var path = require('path');
 var size = 3;
 var multer = require('multer');
-
+var fcmServerKey = "AAAA3BAdYhI:APA91bH623Lc-3E1jzi2ITXEPbdqwOxWU6P7N2AJ-24oceHnXvjSC1h6Nw8KDK42jcUunoyVCo-JgUuHeq_fzlv1-lCo-5OM7REntULSk8Snq0KxpGa65IuKPI8XCz2TS34-svWPkYs7"
+var FCM = require('fcm-node');
+var serverKey = fcmServerKey; //put your server key here
+var fcm = new FCM(serverKey);
 function checkfiletype(file, cb) {
     console.log("myfile " + JSON.stringify(file));
     const filetypes = /jpg|jpeg|png/;
@@ -20,8 +23,28 @@ function checkfiletype(file, cb) {
         return cb("Error : file size must be image");
     }
 }
+var Constant = require('./Utils/Constant');
 
 module.exports = function (app) {
+
+    app.get("/test", (req, res) => {
+        var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+            to: req.query.token,
+            collapse_key: 'channel1',
+            data: {  //you can send only notification or only data(or include both)
+                my_key: Constant.APP_NAME,
+                my_another_key: 'my another value'
+            }
+        };
+
+        fcm.send(message, function (err, response) {
+            if (err) {
+                console.log("Something has gone wrong!" + err);
+            } else {
+                console.log("Successfully sent with response: ", response);
+            }
+        });
+    })
 
     app.post('/UserRegistration', (req, res) => {
 
@@ -34,8 +57,14 @@ module.exports = function (app) {
         user.save().then((item) => {
             res.status(200).json(item)
         }).catch((err) => {
+            if (err.name == 'MongoError') {
+                console.log(`error ${err.message}`)
+                res.status(404).send(err.message);
+                return;
+            }
             console.log(`error ${err}`)
             res.status(400).send(err);
+
         })
 
     });
@@ -61,7 +90,7 @@ module.exports = function (app) {
             if (error == null && items.length != 0) {
                 res.status(200).json(items)
             } else {
-                console.log(`error ${err}`)
+                console.log(`error ${error}`)
                 res.status(400).json({ res: 0 });
             }
 
@@ -79,7 +108,7 @@ module.exports = function (app) {
 
         // });
 
-        ServiceModel.find({"subServiceList.merchantId":req.query.userId}).then((services, error) => {
+        ServiceModel.find({ "subServiceList.merchantId": req.query.userId }).then((services, error) => {
 
             if (error == null) {
                 res.status(200).json(services)
@@ -92,7 +121,7 @@ module.exports = function (app) {
     });
 
     app.post('/GetUser', (req, res) => {
-        UserModel.findOne({ _id: req.query.userId },(err,user) => {
+        UserModel.findOne({ _id: req.query.userId }, (err, user) => {
             if (user != null) {
                 res.status(200).json(user);
             } else {
@@ -111,13 +140,13 @@ module.exports = function (app) {
             ...req.body
         });
 
-        ServiceModel.findOne({serviceName:req.query.seviceCategoryId },(error,response) => {
-            console.log('updateResponse',error);
-            console.log('updateResponse',response);
+        ServiceModel.findOne({ serviceName: req.query.seviceCategoryId }, (error, response) => {
+            console.log('updateResponse', error);
+            console.log('updateResponse', response);
             response.subServiceList.push(subService);
             response.save().then((service, err) => {
                 console.log('added successfully');
-                res.status(200).json(service) 
+                res.status(200).json(service)
             });
         }).catch((err) => {
             console.log(`error ${err}`)
@@ -135,47 +164,41 @@ module.exports = function (app) {
             ...req.body
         });
 
-        ServiceModel.update({serviceName:req.query.seviceCategoryId,subServiceList:{$elemMatch:{_id:req.query.serviceId}}},{$set:{"subServiceList.$":subService}},(error,subservice) => {
-            console.log('updateservice error',error);
-            if(!error)
-            {
-                res.status(200).json(subservice) 
-            }else
-            {
+        ServiceModel.update({ serviceName: req.query.seviceCategoryId, subServiceList: { $elemMatch: { _id: req.query.serviceId } } }, { $set: { "subServiceList.$": subService } }, (error, subservice) => {
+            console.log('updateservice error', error);
+            if (!error) {
+                res.status(200).json(subservice)
+            } else {
                 res.status(400).send(error);
             }
-            
+
         });
     });
 
-    app.post("/GetAllUser",(req,res) => {
-        UserModel.find({}).then((users,error) => {
-            if(users.length > 0)
-            {
+    app.post("/GetAllUser", (req, res) => {
+        UserModel.find({}).then((users, error) => {
+            if (users.length > 0) {
                 res.status(200).json(users);
-            }else
-            {
+            } else {
                 res.status(400).json(error);
             }
         })
     })
 
-    app.post('/DeleteService',(req,res) => {
+    app.post('/DeleteService', (req, res) => {
 
         console.log('OnDeleteService', req.query.serviceCatId);
         console.log('OnDeleteService', req.query.serviceId);
 
-        ServiceModel.update({_id:req.query.serviceCatId},{$pull:{subServiceList:{_id:req.query.serviceId}}},(error,response) => {
-            console.log('delete service' ,error);
-            if(!error)
-            {
-                console.log("success",response);
+        ServiceModel.update({ _id: req.query.serviceCatId }, { $pull: { subServiceList: { _id: req.query.serviceId } } }, (error, response) => {
+            console.log('delete service', error);
+            if (!error) {
+                console.log("success", response);
                 res.status(200).send(response);
-            }else
-            {
+            } else {
                 console.log(response);
                 res.status(400).send(response);
-                
+
             }
         })
 
@@ -183,7 +206,7 @@ module.exports = function (app) {
 
     app.post('/UpdateStaffUser', (req, res) => {
 
-        UserModel.findOneAndUpdate({ _id: req.query.userId }, {$set:{ ...req.body }},{ new: true }, (err, response) => {
+        UserModel.findOneAndUpdate({ _id: req.query.userId }, { $set: { ...req.body } }, { new: true }, (err, response) => {
             console.log(response);
             if (response != null) {
                 res.status(200).json(response);
@@ -233,10 +256,10 @@ module.exports = function (app) {
 
             } else {
 
-                UserModel.findOne({_id: req.query.userid }, (err, user) => {
+                UserModel.findOne({ _id: req.query.userid }, (err, user) => {
                     console.log(user);
                     for (var i = 0; i < req.files.length; i++) {
-                        
+
                         user.userImage.push(req.files[i].filename);
                     }
 
@@ -272,111 +295,224 @@ module.exports = function (app) {
         });
     });
 
-    app.post("/Booking",(req,res) => {
+    app.post("/Booking", (req, res) => {
 
         booking = new Booking({
             ...req.body
         })
 
-        booking.save().then((book,error) => {
-            if(!error)
-            {
-                res.status(200).json(book);
+        booking.save().then((book, error) => {
 
-            }else
-            {
+            if (error == null && book != null) {
+                UserModel.findOne({ _id: book.merchantId }, (err, user) => {
+
+                    if (err == null && user != null) {
+                        console.log(user);
+                        var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+
+                            to: user.fcmToken,
+                            collapse_key: 'channel1',
+                            data: {  //you can send only notification or only data(or include both)
+                                title: Constant.APP_NAME,
+                                message: Constant.BOOKING_RECEIVED,
+                                username: user.userName,
+                                datetime:booking.bookingdate+" "+booking.bookingtime,
+                                status:booking.bookingstatus,
+                                image:user.userImage[0],
+                                iscompleted:booking.completed,
+                                visittype:booking.visitType,
+                                bookingid:booking._id
+                            }
+                        };
+
+                        fcm.send(message, function (err, response) {
+                            if (err) {
+                                res.status(400).json({ err });
+                                console.log("Something has gone wrong!" + err);
+                            } else {
+                                console.log("Successfully sent with response: ", book);
+                                res.status(200).json(book);
+                            }
+                        });
+                    } else {
+                        res.status(400).json({ err });
+                    }
+                });
+            } else {
                 res.status(400).json({ error });
             }
-        }) 
+        })
     });
 
-    app.post("/GetBooking",(req,res) => {
+    app.post("/GetBooking", (req, res) => {
 
-        Booking.find({customerId:req.query.userId}).then((bookings,error) => {
-            if(!error)
-            {
+        Booking.find({ customerId: req.query.userId }).then((bookings, error) => {
+            if (!error) {
                 res.status(200).json(bookings);
 
-            }else
-            {
+            } else {
                 res.status(400).json({ error });
             }
-        }) 
+        })
     });
 
-    app.post("/GetMerchantBooking",(req,res) => {
+    app.post("/GetMerchantBooking", (req, res) => {
 
-        Booking.find({merchantId:req.query.merchantId}).then((bookings,error) => {
-            if(!error)
-            {
+        Booking.find({ merchantId: req.query.merchantId }).then((bookings, error) => {
+            if (error==null && bookings!=null) {
                 res.status(200).json(bookings);
 
-            }else
-            {
+            } else {
                 res.status(400).json({ error });
             }
-        }) 
+        })
     });
 
-    app.post("/CancelBooking",(req,res) => {
+    app.post("/CancelBooking", (req, res) => {
 
-        Booking.remove({_id:req.query.bookingId},(error) => {
-            if(!error)
-            {
-                res.status(200).json({"message":"Booking canceled successfully"});
+        Booking.remove({ _id: req.query.bookingId }, (error) => {
+            if (!error) {
+                res.status(200).json({ "message": "Booking canceled successfully" });
 
-            }else
-            {
+            } else {
                 res.status(400).json({ error });
             }
         });
     })
 
-    app.post("/GetServiceById",(req,res) => {
-        ServiceModel.find({"subServiceList._id":req.query.serviceId},(error,response) => {
-            if(!error)
-            {
+    app.post("/GetServiceById", (req, res) => {
+        ServiceModel.find({ "subServiceList._id": req.query.serviceId }, (error, response) => {
+            if (!error) {
                 res.status(200).json(response);
 
-            }else
-            {
+            } else {
                 res.status(400).json({ error });
             }
         });
     });
 
-    app.post("/GetServiceAndUserById", (req,res) => {
-        ServiceModel.findOne({"subServiceList._id":req.query.serviceId},(error,service) => {
-            if(!error)
-            {
-                UserModel.findOne({ _id: req.query.userId },(err,user) => {
+    app.post("/GetServiceAndUserById", (req, res) => {
+        ServiceModel.findOne({ "subServiceList._id": req.query.serviceId }, (error, service) => {
+            if (!error) {
+                UserModel.findOne({ _id: req.query.userId }, (err, user) => {
                     if (user != null) {
-                        res.status(200).json({user,service});
+                        res.status(200).json({ user, service });
                     } else {
                         console.log(`error ${err}`)
                         res.status(400).json({ res: 0 });
                     }
                 });
 
-            }else
-            {
+            } else {
                 res.status(400).json({ error });
             }
         });
     });
 
-    
+
     app.post('/UpdateBooking', (req, res) => {
 
-        Booking.findOneAndUpdate({ _id: req.body._id }, {$set:{ ...req.body }},{ new: true }, (err, response) => {
+        Booking.findOneAndUpdate({ _id: req.body._id }, { $set: { ...req.body } }, { new: true }, (err, response) => {
             console.log(response);
-            if (response != null) {
-                res.status(200).json(response);
+            var findId,myTitle,myType;
+            if(req.body.bookingstatus == Constant.CANCELED)
+            {
+                findId = response.merchantId;
+                myTitle = Constant.BOOKING_CANCELED;
+                myType  =Constant.BUSINESS;
+
+            }else if(req.body.bookingstatus == Constant.CONFIRMED)
+            {
+                findId = response.customerId;
+                myTitle = Constant.BOOKING_CONFIRMED;
+                myType  =Constant.CUSTOMER;
+                
+            }else if(req.body.bookingstatus == Constant.DECLAINED)
+            {
+                findId = response.customerId;
+                myTitle = Constant.BOOKING_DECLAINED;
+                myType  =Constant.CUSTOMER;
+            }
+           
+            if (err == null && response != null) {
+                UserModel.findOne({ _id: findId }, (err, user) => {
+
+                    if (err == null && user != null) {
+                        console.log(user);
+                        var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+
+                            to: user.fcmToken,
+                            collapse_key: 'channel1',
+                            data: {  //you can send only notification or only data(or include both)
+                                title: Constant.APP_NAME,
+                                message: myTitle,
+                                username: user.userName,
+                                datetime:response.bookingdate+" "+response.bookingtime,
+                                status:response.bookingstatus,
+                                image:user.userImage[0],
+                                iscompleted:response.completed,
+                                visittype:response.visitType,
+                                bookingid:response._id
+                            }
+                        };
+
+                        fcm.send(message, function (err, respon ) {
+                            if (err) {
+                                res.status(200).json(response);
+                                console.log("Something has gone wrong!" + err);
+                            } else {
+                                console.log("Successfully sent with response: ", response);
+                                res.status(200).json(response);
+                            }
+                        });
+                    } else {
+                        res.status(400).json({ err });
+                    }
+                });
             } else {
-                console.log(`error ${err}`)
-                res.status(400).json({ res: 0 });
+                res.status(400).json({ error });
             }
         });
     });
 
+    app.post("/GoogleSignIn", (req, res) => {
+
+        UserModel.findOne({ email: req.query.email, signupwith: req.query.signupwith }, (err, user) => {
+
+            if (err == null && user != null) {
+                console.log(`response ${user}`)
+                res.status(200).json(user);
+
+            } else {
+                console.log(`error ${err}`)
+                console.log(`error ${user}`)
+                res.status(400).json(err);
+            }
+        });
+    });
+
+    app.post("/UpdateToken", (req, res) => {
+
+        UserModel.findOneAndUpdate({ _id: req.query.userId }, { fcmToken: req.query.token }, { new: true }, (err, user) => {
+            if (err == null && user != null) {
+                res.status(200).json(user);
+            } else {
+                res.status(400).json(err);
+            }
+        });
+
+    });
+
+    app.post("/UpdateComment", (req,res) => {
+
+        Booking.updateOne({_id:req.query.bookingId},{comment:"yes"},{new:true},(err,booking) => {
+
+            if (err == null && booking != null) {
+                res.status(200).json(booking);
+            } else {
+                res.status(400).json(err);
+            }
+        
+        });
+    });
 }

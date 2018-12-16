@@ -24,6 +24,7 @@ var merchantSchema = mongoose.Schema({
     canGo:{
         type:Boolean
     },
+
 });
 var validator = require('validator');
 
@@ -64,7 +65,7 @@ var userSchema = new mongoose.Schema({
     },
     userTypes:{
         type:String,
-        require:true,
+        required:true,
         trim:true
     },
     userImage:[String],
@@ -77,6 +78,10 @@ var userSchema = new mongoose.Schema({
     signupwith:{
         type:String,
         required:true,
+    },
+    fcmToken:{
+        type:String,
+        required:true
     }
 },{strict: false});
 

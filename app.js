@@ -8,7 +8,7 @@ app.use(bodyParser.urlencoded({extended:true}));
 app.use(express.static("image"));
 app.use(express.static("proimage"));
 app.use(morgan('dev'));
-const port = 3000;
+const port = 8080;
 const ServiceModel = require('./Models/ServiceModel');
 const mongoose = require('mongoose');
 const URL = "mongodb://localhost:27017/bestspa";
@@ -16,9 +16,7 @@ const URL = "mongodb://localhost:27017/bestspa";
 mongoose.connect(URL).then((res) => {
 
     console.log(`database response ${res}`);
-
     try {
-
             new ServiceModel({
                 serviceName: "MakeUp",
                 serviceImage: "makeup.jpg"
@@ -60,6 +58,10 @@ app.listen(port, (error) => {
     if (!error) {
         console.log(`connection response ${port}`);
     }
+})
+
+app.get("/",(req,res) => {
+    res.send("its working");
 })
 
 require('./routs')(app);
