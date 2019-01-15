@@ -8,7 +8,7 @@ app.use(bodyParser.urlencoded({extended:true}));
 app.use(express.static("image"));
 app.use(express.static("proimage"));
 app.use(morgan('dev'));
-const port = 8080;
+const port = 3000;
 const ServiceModel = require('./Models/ServiceModel');
 const mongoose = require('mongoose');
 const URL = "mongodb://localhost:27017/bestspa";
