@@ -8,4 +8,10 @@ CUSTOMER = "Customer";
 CONFIRMED = "Confirmed";
 DECLAINED = "Declained";
 CANCELED = "Canceled";
-module.exports = {APP_NAME, BOOKING_CONFIRMED, BOOKING_RECEIVED, BUSINESS, CUSTOMER, CONFIRMED, BOOKING_DECLAINED, DECLAINED, CANCELED, BOOKING_CANCELED};
+EMAIL_ID = "patelgautamp@gmail.com";
+EMAIL_PASSWORD = "Gautamjashvant@0261";
+APP_URL = "https://play.google.com/store/apps/details?id=com.google.android.apps.paidtasks";
+LOGO_URL = "http://18.218.164.58:3000/logo.png";
+module.exports = {APP_NAME, BOOKING_CONFIRMED, BOOKING_RECEIVED, BUSINESS,
+     CUSTOMER, CONFIRMED, BOOKING_DECLAINED, DECLAINED, CANCELED, BOOKING_CANCELED,
+     EMAIL_ID, EMAIL_PASSWORD, APP_URL, LOGO_URL };

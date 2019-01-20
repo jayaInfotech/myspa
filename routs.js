@@ -9,21 +9,11 @@ var fcmServerKey = "AAAA3BAdYhI:APA91bH623Lc-3E1jzi2ITXEPbdqwOxWU6P7N2AJ-24oceHn
 var FCM = require('fcm-node');
 var serverKey = fcmServerKey; //put your server key here
 var fcm = new FCM(serverKey);
-function checkfiletype(file, cb) {
-    console.log("myfile " + JSON.stringify(file));
-    const filetypes = /jpg|jpeg|png/;
-    console.log('extname ' + (path.extname(file.originalname).substring(1)));
-
-    const extname = filetypes.test((path.extname(file.originalname).substring(1)).toLowerCase());
-
-    if (extname) {
-        return cb(null, true);
-
-    } else {
-        return cb("Error : file size must be image");
-    }
-}
 var Constant = require('./Utils/Constant');
+const nodemailer = require("nodemailer");
+var ip = require('ip');
+var schedule = require('node-schedule');
+var moment  = require('moment');
 
 module.exports = function (app) {
 
@@ -232,6 +222,22 @@ module.exports = function (app) {
             }
         });
 
+
+        function checkfiletype(file, cb) {
+            console.log("myfile " + JSON.stringify(file));
+            const filetypes = /jpg|jpeg|png/;
+            console.log('extname ' + (path.extname(file.originalname).substring(1)));
+        
+            const extname = filetypes.test((path.extname(file.originalname).substring(1)).toLowerCase());
+        
+            if (extname) {
+                return cb(null, true);
+        
+            } else {
+                return cb("Error : file must be image");
+            }
+        }
+
         var uploads = multer({
             storage: mystorage
             , fileFilter: function (req, file, cb) {
@@ -245,11 +251,16 @@ module.exports = function (app) {
             if (err) {
                 console.log("error occuring while uploading image" + err);
                 if (err.code == "LIMIT_FILE_SIZE") {
-                    res.status(413).json({
+                    res.send({
                         message: "file size must be less then " + size + " MB"
                     });
+                }else if(err.code == "undefined")
+                {
+                    res.send({
+                        message: "file must be jpg | png"
+                    });   
                 } else {
-                    res.status(400).json({
+                    res.send({
                         message: err
                     });
                 }
@@ -297,8 +308,12 @@ module.exports = function (app) {
 
     app.post("/Booking", (req, res) => {
 
+        var date = new Date();
+        console.log("now",date.getUTCHours()+" "+date.getUTCMinutes());
+        date = date+3600;
         booking = new Booking({
-            ...req.body
+            ...req.body,
+            expireAt:moment().add(30, 'minutes')
         })
 
         booking.save().then((book, error) => {
@@ -316,12 +331,12 @@ module.exports = function (app) {
                                 title: Constant.APP_NAME,
                                 message: Constant.BOOKING_RECEIVED,
                                 username: user.userName,
-                                datetime:booking.bookingdate+" "+booking.bookingtime,
-                                status:booking.bookingstatus,
-                                image:user.userImage[0],
-                                iscompleted:booking.completed,
-                                visittype:booking.visitType,
-                                bookingid:booking._id
+                                datetime: booking.bookingdate + " " + booking.bookingtime,
+                                status: booking.bookingstatus,
+                                image: user.userImage[0],
+                                iscompleted: booking.completed,
+                                visittype: booking.visitType,
+                                bookingid: booking._id
                             }
                         };
 
@@ -359,7 +374,7 @@ module.exports = function (app) {
     app.post("/GetMerchantBooking", (req, res) => {
 
         Booking.find({ merchantId: req.query.merchantId }).then((bookings, error) => {
-            if (error==null && bookings!=null) {
+            if (error == null && bookings != null) {
                 res.status(200).json(bookings);
 
             } else {
@@ -414,26 +429,23 @@ module.exports = function (app) {
 
         Booking.findOneAndUpdate({ _id: req.body._id }, { $set: { ...req.body } }, { new: true }, (err, response) => {
             console.log(response);
-            var findId,myTitle,myType;
-            if(req.body.bookingstatus == Constant.CANCELED)
-            {
+            var findId, myTitle, myType;
+            if (req.body.bookingstatus == Constant.CANCELED) {
                 findId = response.merchantId;
                 myTitle = Constant.BOOKING_CANCELED;
-                myType  =Constant.BUSINESS;
+                myType = Constant.BUSINESS;
 
-            }else if(req.body.bookingstatus == Constant.CONFIRMED)
-            {
+            } else if (req.body.bookingstatus == Constant.CONFIRMED) {
                 findId = response.customerId;
                 myTitle = Constant.BOOKING_CONFIRMED;
-                myType  =Constant.CUSTOMER;
-                
-            }else if(req.body.bookingstatus == Constant.DECLAINED)
-            {
+                myType = Constant.CUSTOMER;
+
+            } else if (req.body.bookingstatus == Constant.DECLAINED) {
                 findId = response.customerId;
                 myTitle = Constant.BOOKING_DECLAINED;
-                myType  =Constant.CUSTOMER;
+                myType = Constant.CUSTOMER;
             }
-           
+
             if (err == null && response != null) {
                 UserModel.findOne({ _id: findId }, (err, user) => {
 
@@ -447,16 +459,16 @@ module.exports = function (app) {
                                 title: Constant.APP_NAME,
                                 message: myTitle,
                                 username: user.userName,
-                                datetime:response.bookingdate+" "+response.bookingtime,
-                                status:response.bookingstatus,
-                                image:user.userImage[0],
-                                iscompleted:response.completed,
-                                visittype:response.visitType,
-                                bookingid:response._id
+                                datetime: response.bookingdate + " " + response.bookingtime,
+                                status: response.bookingstatus,
+                                image: user.userImage[0],
+                                iscompleted: response.completed,
+                                visittype: response.visitType,
+                                bookingid: response._id
                             }
                         };
 
-                        fcm.send(message, function (err, respon ) {
+                        fcm.send(message, function (err, respon) {
                             if (err) {
                                 res.status(200).json(response);
                                 console.log("Something has gone wrong!" + err);
@@ -503,16 +515,118 @@ module.exports = function (app) {
 
     });
 
-    app.post("/UpdateComment", (req,res) => {
+    app.post("/UpdateComment", (req, res) => {
 
-        Booking.updateOne({_id:req.query.bookingId},{comment:"yes"},{new:true},(err,booking) => {
+        Booking.updateOne({ _id: req.query.bookingId }, { comment: "yes" }, { new: true }, (err, booking) => {
 
             if (err == null && booking != null) {
                 res.status(200).json(booking);
             } else {
                 res.status(400).json(err);
             }
-        
+
         });
     });
+
+    app.post("/ForgotPassword", (req, res) => {
+
+        console.log(ip.address());
+
+        UserModel.findOne({ email: req.query.email }, (err, user) => {
+
+            console.log(user);
+            console.log(err);
+
+            if ((!err) && (user))  {
+                console.log(user.signupwith);
+
+                if (user.signupwith == "Email") {
+
+                    let account = nodemailer.createTestAccount();
+
+                    // create reusable transporter object using the default SMTP transport
+                    let transporter = nodemailer.createTransport({
+                        // host: "smtp.gmail.com",
+                        // port: 465,
+                        secure: true, // true for 465, false for other ports
+                        service: 'Gmail',
+                        auth: {
+                            user: Constant.EMAIL_ID, // generated ethereal user
+                            pass: Constant.EMAIL_PASSWORD // generated ethereal password
+                        }
+                    });
+
+                    // setup email data with unicode symbols
+                    let mailOptions = {
+                        from: Constant.EMAIL_ID, // sender address
+                        to: "mrpaladiyagautam@gmail.com" , // user.email
+                        subject: "Password Reset", // Subject line
+                        text: ` `, // plain text body
+                        html: `<div>
+                        <div>
+                        <div>
+                        <a href="http://${ip.address()}/logo.png" target="_blank" rel="noopener" >
+                         <img src=${Constant.LOGO_URL} /> 
+                        </a>
+                        </div>
+                        </div>
+                        <div>
+                        <div>
+                        <p>Hi gautam patel</p>
+                        <p>Your new password is <strong> ${user.password} </strong></p>
+                        <p>The password field is CASE sensitive. Please change your password after login to app from the Settings screen.</p>
+                        <p>We just launched and we aim to be the world's largest Spa and Salon booking app!</p>
+                        <p>Please recommend EasySpa to your friends.</p>
+                        </div>
+                        </div>
+                        </div>` // html body
+                    };
+
+                    // send mail with defined transport object
+                    transporter.sendMail(mailOptions, function (error, info) {
+                        if (error) {
+                            console.log(error);
+                            res.status(200).json("Something went wrong please try again ..");
+                        } else {
+                            console.log('Message sent: ' + info.response);
+                            res.status(300).json({message: info.response });
+                        };
+                    });
+
+                    // res.status(200).json(" password sended to your email address successfully");
+
+                } else if (user.signupwith == "Facebook") {
+                    res.status(200).json(`You had sign up with Facebook try to login with email ${user.email} using`);
+
+                } else if (user.signupwith == "Google") {
+                    res.status(200).json(`You had sign up with Google try to login with email ${user.email} using facebook`);
+
+                }
+
+            } else {
+
+                res.status(300).json("No email id matched try again with correct email");
+
+            }
+        });
+
+    });
+
+    app.post("/ChangePassword",(req,res) => {
+
+        UserModel.findOneAndUpdate({_id:req.query.userId},{password:req.query.password},{new:true},(err,user) => {
+           
+            if((!err)&& user)
+            {
+                res.status(200).json(user);
+
+            }else
+            {
+                res.status(400);
+            }
+
+        })
+
+    });
+
 }
