@@ -13,7 +13,8 @@ var Constant = require('./Utils/Constant');
 const nodemailer = require("nodemailer");
 var ip = require('ip');
 var schedule = require('node-schedule');
-var moment  = require('moment');
+var datetime = require('date-and-time');
+
 
 module.exports = function (app) {
 
@@ -227,12 +228,12 @@ module.exports = function (app) {
             console.log("myfile " + JSON.stringify(file));
             const filetypes = /jpg|jpeg|png/;
             console.log('extname ' + (path.extname(file.originalname).substring(1)));
-        
+
             const extname = filetypes.test((path.extname(file.originalname).substring(1)).toLowerCase());
-        
+
             if (extname) {
                 return cb(null, true);
-        
+
             } else {
                 return cb("Error : file must be image");
             }
@@ -254,11 +255,10 @@ module.exports = function (app) {
                     res.send({
                         message: "file size must be less then " + size + " MB"
                     });
-                }else if(err.code == "undefined")
-                {
+                } else if (err.code == "undefined") {
                     res.send({
                         message: "file must be jpg | png"
-                    });   
+                    });
                 } else {
                     res.send({
                         message: err
@@ -306,15 +306,29 @@ module.exports = function (app) {
         });
     });
 
+    function scheduleExecution(futureDate, callback) {
+        // Set an intermediary timeout at every 1 hour interval, to avoid the
+        // 32 bit limitation in setting the timeout delay
+        var maxInterval = 60 * 60 * 1000;
+        var now = new Date();
+
+        if ((futureDate - now) > maxInterval) {
+            // Wait for maxInterval milliseconds, but make
+            // sure we don't go over the scheduled date
+            setTimeout(
+                function () { scheduleExecution(futureDate); },
+                Math.min(futureDate - now, maxInterval));
+        } else {
+            // Set final timeout
+            setTimeout(callback, futureDate - now);
+        }
+    }
+
     app.post("/Booking", (req, res) => {
 
-        var date = new Date();
-        console.log("now",date.getUTCHours()+" "+date.getUTCMinutes());
-        date = date+3600;
         booking = new Booking({
-            ...req.body,
-            expireAt:moment().add(30, 'minutes')
-        })
+            ...req.body
+        });
 
         booking.save().then((book, error) => {
 
@@ -322,9 +336,100 @@ module.exports = function (app) {
                 UserModel.findOne({ _id: book.merchantId }, (err, user) => {
 
                     if (err == null && user != null) {
-                        console.log(user);
-                        var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+                        var dateArray = book.bookingdate.split("-");
+                        var timeArray = book.bookingtime.split(":");
+                        var months = [
+                            'January',
+                            'February',
+                            'March',
+                            'April',
+                            'May',
+                            'June',
+                            'July',
+                            'August',
+                            'September',
+                            'October',
+                            'November',
+                            'December'
+                        ];
+                        console.log(dateArray[0], months.indexOf(dateArray[1]), dateArray[2], timeArray[0], timeArray[1], 0);
+                        var date = new Date(dateArray[2], months.indexOf(dateArray[1]), dateArray[0], timeArray[0], timeArray[1], 0);
+                        schedule.scheduleJob(date, function () {
 
+                            Booking.findById({ _id: book._id }, (err, bookings) => {
+                                console.log("bookings ", bookings);
+                                if (bookings.bookingstatus == Constant.CONFIRMED) {
+                                    Booking.update({ _id: bookings._id }, { bookingstatus: Constant.COMPLETED }, (err, res) => {
+                                        console.log("update response "+res);
+                                        if (res.ok == 1) {
+                                            var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+                                                to: user.fcmToken,
+                                                collapse_key: 'channel1',
+                                                data: {  //you can send only notification or only data(or include both)
+                                                    title: Constant.APP_NAME,
+                                                    message: Constant.BOOKING_COMPLETED,
+                                                    username: user.userName,
+                                                    datetime: bookings.bookingdate + " " + bookings.bookingtime,
+                                                    status: Constant.COMPLETED,
+                                                    image: user.userImage[0],
+                                                    iscompleted: bookings.completed,
+                                                    visittype: bookings.visitType,
+                                                    bookingid: bookings._id,
+                                                    merchantid: bookings.customerId
+                                                }
+                                            };
+
+                                            fcm.send(message, function (err, response) {
+                                                if (err) {
+                                                    // res.status(200).json({ err });
+                                                    console.log("Something has gone wrong!" + err);
+                                                } else {
+                                                    console.log("Successfully sent with response: ", user);
+                                                    // res.status(200).json(book);
+                                                }
+                                            });
+
+                                            UserModel.findOne({ _id: book.customerId }, (err, customer) => {
+                                                if (err == null && customer != null) {
+                                                    var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
+                                                        to: customer.fcmToken,
+                                                        collapse_key: 'channel1',
+                                                        data: {  //you can send only notification or only data(or include both)
+                                                            title: Constant.APP_NAME,
+                                                            message: Constant.BOOKING_COMPLETED,
+                                                            username: customer.userName,
+                                                            datetime: bookings.bookingdate + " " + bookings.bookingtime,
+                                                            status: Constant.COMPLETED,
+                                                            image: customer.userImage[0],
+                                                            iscompleted: bookings.completed,
+                                                            visittype: bookings.visitType,
+                                                            bookingid: bookings._id,
+                                                            merchantid: bookings.merchantId
+                                                        }
+                                                    };
+
+                                                    fcm.send(message, function (err, response) {
+                                                        if (err) {
+                                                            // res.status(200).json({ err });
+                                                            console.log("Something has gone wrong!" + err);
+                                                        } else {
+                                                            console.log("Successfully sent with response: ", customer);
+                                                            // res.status(200).json(book);
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    });
+                                }else
+                                {
+
+                                }
+
+                            });
+                        });
+
+                        var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
                             to: user.fcmToken,
                             collapse_key: 'channel1',
                             data: {  //you can send only notification or only data(or include both)
@@ -342,7 +447,7 @@ module.exports = function (app) {
 
                         fcm.send(message, function (err, response) {
                             if (err) {
-                                res.status(400).json({ err });
+                                res.status(200).json({ err });
                                 console.log("Something has gone wrong!" + err);
                             } else {
                                 console.log("Successfully sent with response: ", book);
@@ -537,7 +642,7 @@ module.exports = function (app) {
             console.log(user);
             console.log(err);
 
-            if ((!err) && (user))  {
+            if ((!err) && (user)) {
                 console.log(user.signupwith);
 
                 if (user.signupwith == "Email") {
@@ -548,7 +653,7 @@ module.exports = function (app) {
                     let transporter = nodemailer.createTransport({
                         // host: "smtp.gmail.com",
                         // port: 465,
-                        secure: true, // true for 465, false for other ports
+                        // secure: true, // true for 465, false for other ports
                         service: 'Gmail',
                         auth: {
                             user: Constant.EMAIL_ID, // generated ethereal user
@@ -559,24 +664,29 @@ module.exports = function (app) {
                     // setup email data with unicode symbols
                     let mailOptions = {
                         from: Constant.EMAIL_ID, // sender address
-                        to: "mrpaladiyagautam@gmail.com" , // user.email
+                        to: user.email, // user.email
                         subject: "Password Reset", // Subject line
-                        text: ` `, // plain text body
+                        text: ` `, // plain text body,
+                        attachments: [{
+                            filename: 'logo.png',
+                            path: __dirname + '/image/logo.png',
+                            cid: 'logo' //my mistake was putting "cid:logo@cid" here! 
+                        }],
                         html: `<div>
                         <div>
                         <div>
-                        <a href="http://${ip.address()}/logo.png" target="_blank" rel="noopener" >
-                         <img src=${Constant.LOGO_URL} /> 
+                        <a href=${Constant.LOGO_URL} target="_blank" rel="noopener" >
+                         <img src="cid:logo" /> 
                         </a>
                         </div>
                         </div>
                         <div>
                         <div>
-                        <p>Hi gautam patel</p>
+                        <p>Hi ${user.userName}</p>
                         <p>Your new password is <strong> ${user.password} </strong></p>
                         <p>The password field is CASE sensitive. Please change your password after login to app from the Settings screen.</p>
                         <p>We just launched and we aim to be the world's largest Spa and Salon booking app!</p>
-                        <p>Please recommend EasySpa to your friends.</p>
+                        <p>Please recommend ${Constant.APP_NAME} to your friends.</p>
                         </div>
                         </div>
                         </div>` // html body
@@ -589,7 +699,7 @@ module.exports = function (app) {
                             res.status(200).json("Something went wrong please try again ..");
                         } else {
                             console.log('Message sent: ' + info.response);
-                            res.status(300).json({message: info.response });
+                            res.status(300).json({ message: info.response });
                         };
                     });
 
@@ -612,21 +722,31 @@ module.exports = function (app) {
 
     });
 
-    app.post("/ChangePassword",(req,res) => {
+    app.post("/ChangePassword", (req, res) => {
 
-        UserModel.findOneAndUpdate({_id:req.query.userId},{password:req.query.password},{new:true},(err,user) => {
-           
-            if((!err)&& user)
-            {
+        UserModel.findOneAndUpdate({ _id: req.query.userId }, { password: req.query.password }, { new: true }, (err, user) => {
+
+            if ((!err) && user) {
                 res.status(200).json(user);
 
-            }else
-            {
+            } else {
                 res.status(400);
             }
 
         })
+    });
+
+    app.post("/WriteReview", (req, res) => {
+
+        UserModel.findOneAndUpdate({ _id: req.query.receiverid }, { $push: { review: req.query.review, rating: req.query.rating } }, (err, user) => {
+            if (err) {
+                console.log('error ', err);
+            } else {
+                res.status(200).send({ "message": "Review Submitted Successfully" });
+            }
+        });
 
     });
+
 
 }

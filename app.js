@@ -48,7 +48,7 @@ mongoose.connect(URL).then((res) => {
             }).save();
 
     } catch(error) {
-        console.log('error',error);
+        // console.log('error',error);
     };
 
 });

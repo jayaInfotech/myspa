@@ -14,10 +14,7 @@ var merchantSchema = mongoose.Schema({
         type:String
     },
     timeid:String,
-    rating:{
-        type:[Number],
-        default:0
-    },
+    
     canVisit:{
         type:Boolean
     },
@@ -87,6 +84,14 @@ var userSchema = new mongoose.Schema({
         type:Boolean,
         required:true,
         default:true
+    },
+    rating:{
+        type:[Number],
+        default:0
+    },
+    review:{
+        type:[String],
+        default:0
     }
 },{strict: false});
 

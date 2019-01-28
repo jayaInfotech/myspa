@@ -39,9 +39,8 @@ var bookingSchema = new mongoose.Schema({
     },
     address:{
         type:[String],
-    },
-    createdAt: { type: Date, default: Date.now },
-    expireAt: { type: Date, default: undefined } 
+    }
+    // createdAt: { type: Date, default: Date.now }
 });
 
 module.exports = mongoose.model("Booking",bookingSchema);
