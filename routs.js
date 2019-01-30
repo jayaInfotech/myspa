@@ -306,24 +306,6 @@ module.exports = function (app) {
         });
     });
 
-    function scheduleExecution(futureDate, callback) {
-        // Set an intermediary timeout at every 1 hour interval, to avoid the
-        // 32 bit limitation in setting the timeout delay
-        var maxInterval = 60 * 60 * 1000;
-        var now = new Date();
-
-        if ((futureDate - now) > maxInterval) {
-            // Wait for maxInterval milliseconds, but make
-            // sure we don't go over the scheduled date
-            setTimeout(
-                function () { scheduleExecution(futureDate); },
-                Math.min(futureDate - now, maxInterval));
-        } else {
-            // Set final timeout
-            setTimeout(callback, futureDate - now);
-        }
-    }
-
     app.post("/Booking", (req, res) => {
 
         booking = new Booking({
@@ -333,8 +315,8 @@ module.exports = function (app) {
         booking.save().then((book, error) => {
 
             if (error == null && book != null) {
-                UserModel.findOne({ _id: book.merchantId }, (err, user) => {
-
+                UserModel.findOne({_id: book.merchantId}, (err, user) => {
+                    
                     if (err == null && user != null) {
                         var dateArray = book.bookingdate.split("-");
                         var timeArray = book.bookingtime.split(":");
@@ -354,13 +336,18 @@ module.exports = function (app) {
                         ];
                         console.log(dateArray[0], months.indexOf(dateArray[1]), dateArray[2], timeArray[0], timeArray[1], 0);
                         var date = new Date(dateArray[2], months.indexOf(dateArray[1]), dateArray[0], timeArray[0], timeArray[1], 0);
+                        console.log("date "+date);
                         schedule.scheduleJob(date, function () {
-
-                            Booking.findById({ _id: book._id }, (err, bookings) => {
+                            console.log("calling chedule ");
+                            Booking.findOne({ _id: book._id }, (err, bookings) => {
                                 console.log("bookings ", bookings);
-                                if (bookings.bookingstatus == Constant.CONFIRMED) {
+                                console.log("bookings ", bookings.bookingstatus);
+                                console.log("error "+err);
+                                if (bookings.bookingstatus == 'Confirmed') {
+                                    console.log("done")
                                     Booking.update({ _id: bookings._id }, { bookingstatus: Constant.COMPLETED }, (err, res) => {
                                         console.log("update response "+res);
+                                        console.log("opdate error "+err);
                                         if (res.ok == 1) {
                                             var message = { //this may vary according to the message type (single recipient, multicast, topic, et cetera)
                                                 to: user.fcmToken,
@@ -423,7 +410,7 @@ module.exports = function (app) {
                                     });
                                 }else
                                 {
-
+                                    console.log("booking pending");
                                 }
 
                             });
